@@ -27,6 +27,10 @@ class Channel(object):
 
     def __getattr__(self, item):
         real_fn = getattr(self.channel_client, item)
+        if not hasattr(real_fn, '__call__'):
+            raise AttributeError(
+                "'%s' object has no attribute '%r'" % (
+                    self.__class__.__name__, item))
 
         def channel_fn(**kwargs):
             return real_fn(self.channel_client, channelId=self.id, **kwargs)
@@ -37,6 +41,7 @@ class Channel(object):
         def cb(channel, event):
             if event['channel']['id'] == self.id:
                 fn(channel, event)
+
         self.client.on_dtmf_received(cb)
 
 
