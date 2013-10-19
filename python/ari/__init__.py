@@ -4,3 +4,8 @@
 
 """ARI client library
 """
+
+import client
+
+Client = client.Client
+AriBasicAuthFactory = client.AriBasicAuthFactory
