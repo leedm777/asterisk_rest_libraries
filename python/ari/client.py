@@ -141,7 +141,7 @@ class Client(object):
         # noinspection PyTypeChecker
         for msg_str in iter(lambda: ws.recv(), None):
             msg_json = json.loads(msg_str)
-            print json.dumps(msg_json)
+            #print json.dumps(msg_json)
             for listener in self.event_listeners.get(
                     msg_json.get('type')) or []:
                 listener(msg_json)
