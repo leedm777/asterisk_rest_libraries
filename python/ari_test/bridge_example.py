@@ -19,6 +19,7 @@ else:
 
 
 def on_enter(bridge, ev):
+    # ignore announcer channels - see ASTERISK-22744
     if not ev['channel']['name'].startswith('Announcer/'):
         bridge.play(media="sound:demo-congrats")
 

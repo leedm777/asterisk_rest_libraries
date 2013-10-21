@@ -130,7 +130,7 @@ class Client(object):
         return [Bridge(self, j) for j in resp.json()]
 
     def originate(self, **kwargs):
-        resp = self.swagger.apis.channels.original(**kwargs)
+        resp = self.swagger.apis.channels.originate(**kwargs)
         resp.raise_for_status()
         return Channel(self, resp.json())
 
