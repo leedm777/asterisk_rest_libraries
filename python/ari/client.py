@@ -51,7 +51,37 @@ class Channel(object):
 
 
 class Bridge(object):
-    pass
+    def __init__(self, client, bridge_json):
+        self.client = client
+        self.bridge_client = client.swagger.apis.bridges
+        self.bridge_json = bridge_json
+        self.id = bridge_json['id']
+
+    def __getattr__(self, item):
+        real_fn = getattr(self.bridge_client, item)
+        if not hasattr(real_fn, '__call__'):
+            raise AttributeError(
+                "'%s' object has no attribute '%r'" % (
+                    self.__class__.__name__, item))
+
+        def bridge_fn(**kwargs):
+            return real_fn(self.bridge_client, bridgeId=self.id, **kwargs)
+
+        return bridge_fn
+
+    def __getitem__(self, item):
+        return self.bridge_json[item]
+
+    def on_event(self, event_type, fn):
+        def fn_filter(bridges, event):
+            if isinstance(bridges, dict):
+                if self.id in [c.id for c in bridges.values()]:
+                    fn(bridges, event)
+            else:
+                if self.id == bridges.id:
+                    fn(bridges, event)
+
+        self.client.on_bridge_event(event_type, fn_filter)
 
 
 class Playback(object):
@@ -89,6 +119,21 @@ class Client(object):
             apps = [apps]
         self.apps = apps or []
 
+    def create_bridge(self, **kwargs):
+        resp = self.swagger.apis.bridges.create(**kwargs)
+        resp.raise_for_status()
+        return Bridge(self, resp.json())
+
+    def list_bridges(self, **kwargs):
+        resp = self.swagger.apis.bridges.list(**kwargs)
+        resp.raise_for_status()
+        return [Bridge(self, j) for j in resp.json()]
+
+    def originate(self, **kwargs):
+        resp = self.swagger.apis.channels.original(**kwargs)
+        resp.raise_for_status()
+        return Channel(self, resp.json())
+
     def run(self):
         ws = self.swagger.apis.events.eventWebsocket(app=','.join(self.apps))
         # TypeChecker false positive on iter(callable, sentinel) -> iterator
@@ -96,6 +141,7 @@ class Client(object):
         # noinspection PyTypeChecker
         for msg_str in iter(lambda: ws.recv(), None):
             msg_json = json.loads(msg_str)
+            print json.dumps(msg_json)
             for listener in self.event_listeners.get(
                     msg_json.get('type')) or []:
                 listener(msg_json)
@@ -107,27 +153,33 @@ class Client(object):
             self.event_listeners[event_type] = listeners
         listeners.append(fn)
 
-    def on_channel_event(self, event_type, fn):
+    def on_object_event(self, event_type, event_cb, factory_fn, model_id):
         event_model = self.event_models[event_type]
         if not event_model:
             raise ValueError("Cannot find event model '%s'" % event_type)
 
-        channel_fields = [k for (k, v) in event_model.properties
-                          if v.type == 'Channel']
-        if not channel_fields:
-            raise ValueError("Event model '%s' has not fields of type Channel"
-                             % event_type)
+        obj_fields = [k for (k, v) in event_model.properties
+                      if v.type == model_id]
+        if not obj_fields:
+            raise ValueError("Event model '%s' has not fields of type %s"
+                             % (event_type, model_id))
 
         def fn_channels(event):
-            channels = {channel_field: Channel(self, event[channel_field])
-                        for channel_field in channel_fields
-                        if event.get(channel_field)}
+            obj = {obj_field: factory_fn(self, event[obj_field])
+                   for obj_field in obj_fields
+                   if event.get(obj_field)}
             # If there's only one channel field, just pass that along
-            if len(channel_fields) == 1:
-                if channels:
-                    channels = channels.values()[0]
+            if len(obj_fields) == 1:
+                if obj:
+                    obj = obj.values()[0]
                 else:
-                    channels = None
-            fn(channels, event)
+                    obj = None
+            event_cb(obj, event)
 
         self.on_event(event_type, fn_channels)
+
+    def on_channel_event(self, event_type, fn):
+        return self.on_object_event(event_type, fn, Channel, 'Channel')
+
+    def on_bridge_event(self, event_type, fn):
+        return self.on_object_event(event_type, fn, Bridge, 'Bridge')
