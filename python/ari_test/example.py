@@ -15,7 +15,7 @@ def on_dtmf(channel, event):
     digit = event['digit']
     if digit == '#':
         channel.play(media='sound:goodbye')
-        channel.hangup()
+        channel.continueInDialplan()
     elif digit == '*':
         channel.play(media='sound:asterisk-friend')
     else:
@@ -23,10 +23,10 @@ def on_dtmf(channel, event):
 
 
 def on_start(channel, event):
-    channel.on_dtmf_received(on_dtmf)
+    channel.on_event('ChannelDtmfReceived', on_dtmf)
     channel.answer()
     channel.play(media='sound:hello-world')
 
 
-client.on_stasis_start(on_start)
+client.on_channel_event('StasisStart', on_start)
 client.run()
