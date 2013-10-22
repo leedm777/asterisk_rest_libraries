@@ -70,7 +70,7 @@ class BaseObject(object):
         def promoter(**kwargs):
             # Add id to param list
             kwargs[self.param_name] = self.id
-            promote(self.client, oper(**kwargs), oper.json)
+            return promote(self.client, oper(**kwargs), oper.json)
 
         return promoter
 
@@ -101,7 +101,15 @@ class Bridge(BaseObject):
             Bridge, 'Bridge')
 
 
+class Playback(BaseObject):
+    def __init__(self, client, playback_json):
+        super(Playback, self).__init__(
+            client, client.swagger.apis.playback, playback_json, 'playbackId',
+            Playback, 'Playback')
+
+
 CLASS_MAP = {
     'Channel': Channel,
-    'Bridge': Bridge
+    'Bridge': Bridge,
+    'Playback': Playback
 }
