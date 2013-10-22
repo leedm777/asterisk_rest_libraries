@@ -9,19 +9,19 @@ import ari
 session_factory = ari.AriBasicAuthFactory('hey', 'peekaboo')
 client = ari.Client('localhost', session_factory, apps='hello')
 
-bridges = [b for b in client.list_bridges() if b['bridge_type'] == 'holding']
+bridges = [b for b in client.bridges.list() if b['bridge_type'] == 'holding']
 if bridges:
     bridge = bridges[0]
     print "Using bridge %s" % bridge.id
 else:
-    bridge = client.create_bridge(type='holding')
+    bridge = client.bridges.create(type='holding')
     print "Created bridge %s" % bridge.id
 
 
 def on_enter(bridge, ev):
     # ignore announcer channels - see ASTERISK-22744
     if not ev['channel']['name'].startswith('Announcer/'):
-        bridge.play(media="sound:demo-congrats")
+        bridge.play(media="sound:hello-world")
 
 
 bridge.on_event('ChannelEnteredBridge', on_enter)
