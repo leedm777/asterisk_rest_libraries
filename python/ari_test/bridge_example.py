@@ -5,11 +5,13 @@
 #
 
 import ari
+from swaggerpy.http_client import SynchronousHttpClient
 
-session_factory = ari.AriBasicAuthFactory('hey', 'peekaboo')
-client = ari.Client('localhost', session_factory, apps='hello')
+http_client = SynchronousHttpClient()
+http_client.set_basic_auth('localhost', 'hey', 'peekaboo')
+client = ari.Client('http://localhost:8088/', http_client, apps='hello')
 
-bridges = [b for b in client.bridges.list() if b['bridge_type'] == 'holding']
+bridges = [b for b in client.bridges.list() if b.json['bridge_type'] == 'holding']
 if bridges:
     bridge = bridges[0]
     print "Using bridge %s" % bridge.id

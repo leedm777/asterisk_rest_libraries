@@ -1,23 +1,30 @@
 #!/usr/bin/env python
 
 import re
+import requests
+import logging
+
+log = logging.getLogger(__name__)
 
 
-def promote(resp, response_class):
+def promote(client, resp, operation_json):
     resp.raise_for_status()
 
-    clazz = response_class
+    response_class = operation_json['responseClass']
     is_list = False
-    m = re.match('''List\[(.*)\]''', clazz)
+    m = re.match('''List\[(.*)\]''', response_class)
     if m:
-        clazz = m.group(1)
+        response_class = m.group(1)
         is_list = True
-    factory = CLASS_MAP.get(clazz)
+    factory = CLASS_MAP.get(response_class)
     if factory:
         resp_json = resp.json()
         if is_list:
-            return [factory(obj) for obj in resp_json]
-        return factory(resp_json)
+            return [factory(client, obj) for obj in resp_json]
+        return factory(client, resp_json)
+    if resp.status_code == requests.codes.no_content:
+        return None
+    log.info("No first class model for %s; returning JSON" % response_class)
     return resp.json()
 
 
@@ -32,28 +39,30 @@ class Repository(object):
 
     def __getattr__(self, item):
         oper = getattr(self.api, item)
-        if not (hasattr(oper, '__call__') and hasattr(oper, 'response_class')):
+        if not (hasattr(oper, '__call__') and hasattr(oper, 'json')):
             raise AttributeError(
                 "'%s' object has no attribute '%r'" % (
                     self.__class__.__name__, item))
 
-        return lambda **kwargs: promote(oper(**kwargs), oper.response_class)
+        return lambda **kwargs: promote(self.client, oper(**kwargs), oper.json)
 
 
-class DomainObject(object):
-    def __init__(self, client, api, as_json, param_name):
+class BaseObject(object):
+    def __init__(self, client, api, as_json, param_name, factory_fn, model_id):
         self.client = client
         self.api = api
         self.json = as_json
         self.id = as_json['id']
         self.param_name = param_name
+        self.model_id = model_id
+        self.factory_fn = factory_fn
 
     def __repr__(self):
         return "Repository(%s)" % self.name
 
     def __getattr__(self, item):
         oper = getattr(self.api, item)
-        if not (hasattr(oper, '__call__') and hasattr(oper, 'response_class')):
+        if not (hasattr(oper, '__call__') and hasattr(oper, 'json')):
             raise AttributeError(
                 "'%s' object has no attribute '%r'" % (
                     self.__class__.__name__, item))
@@ -61,43 +70,35 @@ class DomainObject(object):
         def promoter(**kwargs):
             # Add id to param list
             kwargs[self.param_name] = self.id
-            promote(oper(**kwargs), oper.response_class)
+            promote(self.client, oper(**kwargs), oper.json)
 
         return promoter
 
+    def on_event(self, event_type, fn):
+        def fn_filter(objects, event):
+            if isinstance(objects, dict):
+                if self.id in [c.id for c in objects.values()]:
+                    fn(objects, event)
+            else:
+                if self.id == objects.id:
+                    fn(objects, event)
 
-class Channel(DomainObject):
+        self.client.on_object_event(event_type, fn_filter, self.factory_fn,
+                                    self.model_id)
+
+
+class Channel(BaseObject):
     def __init__(self, client, channel_json):
-        super(Channel, self).__init__(client, client.swagger.apis.channels,
-                                      channel_json, 'channelId')
-
-    def on_event(self, event_type, fn):
-        def fn_filter(channels, event):
-            if isinstance(channels, dict):
-                if self.id in [c.id for c in channels.values()]:
-                    fn(channels, event)
-            else:
-                if self.id == channels.id:
-                    fn(channels, event)
-
-        self.client.on_channel_event(event_type, fn_filter)
+        super(Channel, self).__init__(
+            client, client.swagger.apis.channels, channel_json, 'channelId',
+            Channel, 'Channel')
 
 
-class Bridge(DomainObject):
+class Bridge(BaseObject):
     def __init__(self, client, bridge_json):
-        super(Bridge, self).__init__(client, client.swagger.apis.bridges,
-                                     bridge_json, 'bridgeId')
-
-    def on_event(self, event_type, fn):
-        def fn_filter(bridges, event):
-            if isinstance(bridges, dict):
-                if self.id in [c.id for c in bridges.values()]:
-                    fn(bridges, event)
-            else:
-                if self.id == bridges.id:
-                    fn(bridges, event)
-
-        self.client.on_bridge_event(event_type, fn_filter)
+        super(Bridge, self).__init__(
+            client, client.swagger.apis.bridges, bridge_json, 'bridgeId',
+            Bridge, 'Bridge')
 
 
 CLASS_MAP = {

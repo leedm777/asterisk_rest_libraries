@@ -3,13 +3,20 @@
 #
 # Copyright (c) 2013, Digium, Inc.
 #
+from requests import HTTPError
 
 import ari
+from swaggerpy.http_client import SynchronousHttpClient, requests
+import logging
 
-session_factory = ari.AriBasicAuthFactory('hey', 'peekaboo')
-client = ari.Client('localhost', session_factory, apps='hello')
+logging.basicConfig()
 
-bridges = [b for b in client.bridges.list() if b['bridge_type'] == 'holding']
+http_client = SynchronousHttpClient()
+http_client.set_basic_auth('localhost', 'hey', 'peekaboo')
+client = ari.Client('http://localhost:8088/', http_client, apps='hello')
+
+bridges = [b for b in client.bridges.list()
+           if b.json['bridge_type'] == 'holding']
 if bridges:
     holding_bridge = bridges[0]
     print "Using bridge %s" % holding_bridge.id
@@ -18,6 +25,14 @@ else:
     print "Created bridge %s" % holding_bridge.id
 
 
+def safe_hangup(channel):
+    try:
+        channel.hangup()
+    except HTTPError as e:
+        # Ignore 404's, since channels can go away before we get to them
+        if e.response.status_code != requests.codes.not_found:
+            raise
+
 def connect(incoming, ev):
     if ev['args'] == ['incoming']:
         incoming.answer()
@@ -25,8 +40,8 @@ def connect(incoming, ev):
         holding_bridge.addChannel(channel=incoming.id)
         outgoing = client.channels.originate(endpoint="SIP/blink", app="hello",
                                              appArgs="dialed")
-        incoming.on_event('StasisEnd', lambda *args: outgoing.hangup())
-        outgoing.on_event('ChannelDestroyed', lambda *args: incoming.hangup())
+        incoming.on_event('StasisEnd', lambda *args: safe_hangup(outgoing))
+        outgoing.on_event('ChannelDestroyed', lambda *args: safe_hangup(incoming))
 
         def bridge_the_call(*ignored):
             bridge = client.bridges.create(type='mixing')

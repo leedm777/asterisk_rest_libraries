@@ -5,10 +5,11 @@
 #
 
 import ari
+from swaggerpy.http_client import SynchronousHttpClient
 
-
-session_factory = ari.AriBasicAuthFactory('hey', 'peekaboo')
-client = ari.Client('localhost', session_factory, apps='hello')
+http_client = SynchronousHttpClient()
+http_client.set_basic_auth('localhost', 'hey', 'peekaboo')
+client = ari.Client('http://localhost:8088/', http_client, apps='hello')
 
 
 def on_dtmf(channel, event):
