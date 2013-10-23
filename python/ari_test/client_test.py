@@ -70,6 +70,23 @@ class ClientTest(unittest.TestCase):
         except AttributeError:
             pass
 
+    def test_bad_repo_method(self):
+        try:
+            self.uut.channels.i_am_not_a_method()
+            self.fail("How did it find that method?")
+        except AttributeError:
+            pass
+
+    def test_bad_object_method(self):
+        serve(GET, 'channels', 'test-channel', body='{"id": "test-channel"}')
+
+        try:
+            channel = self.uut.channels.get(channelId='test-channel')
+            channel.i_am_not_a_method()
+            self.fail("How did it find that method?")
+        except AttributeError:
+            pass
+
     def test_bad_param(self):
         try:
             self.uut.channels.list(i_am_not_a_param='asdf')
