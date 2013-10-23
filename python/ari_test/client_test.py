@@ -16,6 +16,7 @@ POST = httpretty.POST
 DELETE = httpretty.DELETE
 
 
+# noinspection PyDocstring
 class ClientTest(AriTestCase):
     def test_docs(self):
         fp = urllib.urlopen("http://ari.py/ari/api-docs/resources.json")
@@ -106,7 +107,7 @@ class ClientTest(AriTestCase):
 
     def setUp(self):
         super(ClientTest, self).setUp()
-        self.uut = ari.connect('http://ari.py/', 'test', 'test', 'test')
+        self.uut = ari.connect('http://ari.py/', 'test', 'test')
 
 
 if __name__ == '__main__':

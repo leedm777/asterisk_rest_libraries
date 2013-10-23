@@ -17,10 +17,9 @@ class Client(object):
 
     :param base_url: Base URL for accessing Asterisk.
     :param http_client: HTTP client interface.
-    :param apps:
     """
 
-    def __init__(self, base_url, http_client, apps=None):
+    def __init__(self, base_url, http_client):
         url = urlparse.urljoin(base_url, "ari/api-docs/resources.json")
 
         self.swagger = swaggerpy.client.SwaggerClient(
@@ -40,10 +39,6 @@ class Client(object):
         self.event_listeners = {}
         self.global_listeners = []
 
-        if isinstance(apps, str):
-            apps = [apps]
-        self.apps = apps or []
-
     def __getattr__(self, item):
         """Exposes repositories as Client fields.
 
@@ -56,10 +51,18 @@ class Client(object):
                     self.__class__.__name__, item))
         return repo
 
-    def run(self):
+    def run(self, apps):
         """Connect to the WebSocket and begin processing messages.
+
+        This method will block until all messages have been received from the
+        WebSocket.
+
+        :param apps: Application (or list of applications) to connect for
+        :type  apps: str or list of str
         """
-        ws = self.swagger.apis.events.eventWebsocket(app=','.join(self.apps))
+        if isinstance(apps, list):
+            apps = ','.join(apps)
+        ws = self.swagger.apis.events.eventWebsocket(app=apps)
         # TypeChecker false positive on iter(callable, sentinel) -> iterator
         # Fixed in plugin v3.0.1
         # noinspection PyTypeChecker

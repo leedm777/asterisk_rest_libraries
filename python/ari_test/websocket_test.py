@@ -26,7 +26,7 @@ class WebSocketTest(AriTestCase):
     def test_empty(self):
         uut = connect(BASE_URL, 'test', [])
         uut.on_event('ev', self.record_event)
-        uut.run()
+        uut.run('test')
         self.assertEqual([], self.actual)
 
     def test_series(self):
@@ -39,7 +39,7 @@ class WebSocketTest(AriTestCase):
         ]
         uut = connect(BASE_URL, 'test', messages)
         uut.on_event("ev", self.record_event)
-        uut.run()
+        uut.run('test')
         expected = [
             {"type": "ev", "data": 1},
             {"type": "ev", "data": 2},
@@ -59,7 +59,7 @@ class WebSocketTest(AriTestCase):
             channel.hangup()
 
         uut.on_channel_event('StasisStart', cb)
-        uut.run()
+        uut.run('test')
 
         expected = [
             {"type": "StasisStart", "channel": {"id": "test-channel"}}
@@ -83,7 +83,7 @@ class WebSocketTest(AriTestCase):
             channel.hangup()
 
         channel.on_event('ChannelStateChange', cb)
-        uut.run()
+        uut.run('test')
 
         expected = [
             {"type": "ChannelStateChange", "channel": {"id": "test-channel"}}
@@ -139,7 +139,7 @@ class WebSocketStubClient(SynchronousHttpClient):
 
 def connect(base_url, apps, messages):
     http_client = WebSocketStubClient(messages)
-    return ari.Client(base_url, http_client, apps=apps)
+    return ari.Client(base_url, http_client)
 
 
 if __name__ == '__main__':
