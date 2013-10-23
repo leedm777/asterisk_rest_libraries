@@ -1,63 +1,49 @@
 #!/usr/bin/env python
 
+import ari
 import httpretty
 import json
-import os
+import requests
 import unittest
 import urllib
-import urlparse
-import ari
-import requests
 
-BASE_URL = "http://ari.py/ari"
+from ari_test.utils import AriTestCase
+
+
 GET = httpretty.GET
 PUT = httpretty.PUT
 POST = httpretty.POST
 DELETE = httpretty.DELETE
 
 
-def build_url(*args):
-    url = BASE_URL
-    for arg in args:
-        url = urlparse.urljoin(url + '/', arg)
-    return url
-
-
-def serve(method, *args, **kwargs):
-    url = build_url(*args)
-    if kwargs.get('body') is None and 'status' not in kwargs:
-        kwargs['status'] = requests.codes.no_content
-    return httpretty.register_uri(method, url, content_type="application/json",
-                                  **kwargs)
-
-
-class ClientTest(unittest.TestCase):
+class ClientTest(AriTestCase):
     def test_docs(self):
         fp = urllib.urlopen("http://ari.py/ari/api-docs/resources.json")
         try:
             actual = json.load(fp)
-            self.assertEqual(BASE_URL, actual['basePath'])
+            self.assertEqual(self.BASE_URL, actual['basePath'])
         finally:
             fp.close()
 
     def test_empty_listing(self):
-        serve(GET, 'channels', body='[]')
+        self.serve(GET, 'channels', body='[]')
         actual = self.uut.channels.list()
         self.assertEqual([], actual)
 
     def test_one_listing(self):
-        serve(GET, 'channels', body='[{"id": "test-channel"}]')
-        serve(DELETE, 'channels', 'test-channel')
+        self.serve(GET, 'channels', body='[{"id": "test-channel"}]')
+        self.serve(DELETE, 'channels', 'test-channel')
 
         actual = self.uut.channels.list()
         self.assertEqual(1, len(actual))
         actual[0].hangup()
 
     def test_play(self):
-        serve(GET, 'channels', 'test-channel', body='{"id": "test-channel"}')
-        serve(POST, 'channels', 'test-channel', 'play',
-              body='{"id": "test-playback"}')
-        serve(DELETE, 'playback', 'test-playback')
+        self.serve(GET, 'channels', 'test-channel',
+                   body='{"id": "test-channel"}')
+        self.serve(POST, 'channels', 'test-channel', 'play',
+                   body='{"id": "test-playback"}')
+        self.serve(DELETE, 'playback', 'test-playback')
 
         channel = self.uut.channels.get(channelId='test-channel')
         playback = channel.play(media='sound:test-sound')
@@ -78,7 +64,8 @@ class ClientTest(unittest.TestCase):
             pass
 
     def test_bad_object_method(self):
-        serve(GET, 'channels', 'test-channel', body='{"id": "test-channel"}')
+        self.serve(GET, 'channels', 'test-channel',
+                   body='{"id": "test-channel"}')
 
         try:
             channel = self.uut.channels.get(channelId='test-channel')
@@ -95,8 +82,8 @@ class ClientTest(unittest.TestCase):
             pass
 
     def test_bad_response(self):
-        serve(GET, 'channels', body='{"message": "This is just a test"}',
-              status=500)
+        self.serve(GET, 'channels', body='{"message": "This is just a test"}',
+                   status=500)
         try:
             self.uut.channels.list()
             self.fail("Should have thrown an exception")
@@ -106,10 +93,10 @@ class ClientTest(unittest.TestCase):
                 {"message": "This is just a test"}, e.response.json())
 
     def test_endpoints(self):
-        serve(GET, 'endpoints',
-              body='[{"technology": "TEST", "resource": "1234"}]')
-        serve(GET, 'endpoints', 'TEST', '1234',
-              body='{"technology": "TEST", "resource": "1234"}')
+        self.serve(GET, 'endpoints',
+                   body='[{"technology": "TEST", "resource": "1234"}]')
+        self.serve(GET, 'endpoints', 'TEST', '1234',
+                   body='{"technology": "TEST", "resource": "1234"}')
 
         endpoints = self.uut.endpoints.list()
         self.assertEqual(1, len(endpoints))
@@ -119,21 +106,7 @@ class ClientTest(unittest.TestCase):
 
     def setUp(self):
         super(ClientTest, self).setUp()
-        httpretty.enable()
-        self.serve_api()
         self.uut = ari.connect('http://ari.py/', 'test', 'test', 'test')
-
-    def tearDown(self):
-        super(ClientTest, self).tearDown()
-        httpretty.disable()
-        httpretty.reset()
-
-    def serve_api(self):
-        for filename in os.listdir('sample-api'):
-            if filename.endswith('.json'):
-                with open(os.path.join('sample-api', filename)) as fp:
-                    body = fp.read()
-                serve(GET, 'api-docs', filename, body=body)
 
 
 if __name__ == '__main__':

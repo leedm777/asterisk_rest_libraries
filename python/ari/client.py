@@ -12,6 +12,16 @@ from ari.model import *
 log = logging.getLogger(__name__)
 
 
+class RegexListener(object):
+    def __init__(self, regex, callback):
+        self.regex = regex
+        self.callback = callback
+
+    def __call__(self, event):
+        if self.regex.match(event.get('type')):
+            self.callback(event)
+
+
 class Client(object):
     """ARI Client object.
 
@@ -38,6 +48,7 @@ class Client(object):
             self.event_models = {}
 
         self.event_listeners = {}
+        self.global_listeners = []
 
         if isinstance(apps, str):
             apps = [apps]
@@ -64,8 +75,13 @@ class Client(object):
         # noinspection PyTypeChecker
         for msg_str in iter(lambda: ws.recv(), None):
             msg_json = json.loads(msg_str)
-            for listener in self.event_listeners.get(
-                    msg_json.get('type')) or []:
+            if not isinstance(msg_json, dict) or 'type' not in msg_json:
+                log.error("Invalid event: %s" % msg_str)
+                continue
+
+            listeners = self.global_listeners + self.event_listeners.get(
+                msg_json['type'], [])
+            for listener in listeners:
                 # noinspection PyBroadException
                 try:
                     listener(msg_json)
@@ -79,11 +95,17 @@ class Client(object):
         :param event_cb: Callback function
         :type  event_cb: (dict) -> None
         """
-        listeners = self.event_listeners.get(event_type)
-        if listeners is None:
-            listeners = []
-            self.event_listeners[event_type] = listeners
-        listeners.append(event_cb)
+        if isinstance(event_type, str):
+            listeners = self.event_listeners.get(event_type)
+            if listeners is None:
+                listeners = []
+                self.event_listeners[event_type] = listeners
+            listeners.append(event_cb)
+        elif hasattr(event_type, 'match'):
+            self.global_listeners.append(RegexListener(event_type, event_cb))
+        else:
+            raise ValueError('Unsupported event_type: %s' %
+                             event_type.__class__.__name__)
 
     def on_object_event(self, event_type, event_cb, factory_fn, model_id):
         """Register callback for events with the given type. Event fields of
