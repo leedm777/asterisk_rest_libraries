@@ -52,7 +52,7 @@ class Client(object):
         repo = self.repositories.get(item)
         if not repo:
             raise AttributeError(
-                "AttributeError: '%s' object has no attribute '%s'" % (
+                "AttributeError: '%r' object has no attribute '%s'" % (
                     self.__class__.__name__, item))
         return repo
 
@@ -104,14 +104,14 @@ class Client(object):
         :param factory_fn: Function for creating Obj from JSON
         :param model_id: String id for Obj from Swagger models.
         """
-        event_model = self.event_models[event_type]
+        event_model = self.event_models.get(event_type)
         if not event_model:
             raise ValueError("Cannot find event model '%s'" % event_type)
 
         obj_fields = [k for (k, v) in event_model['properties'].items()
                       if v['type'] == model_id]
         if not obj_fields:
-            raise ValueError("Event model '%s' has not fields of type %s"
+            raise ValueError("Event model '%s' has no fields of type %s"
                              % (event_type, model_id))
 
         def fn_channels(event):

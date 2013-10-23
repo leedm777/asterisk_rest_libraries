@@ -90,6 +90,26 @@ class WebSocketTest(AriTestCase):
         ]
         self.assertEqual(expected, self.actual)
 
+    def test_bad_event_type(self):
+        uut = connect(BASE_URL, 'test', [])
+        try:
+            uut.on_object_event(
+                'BadEventType', self.noop, self.noop, 'Channel')
+            self.fail("Event does not exist")
+        except ValueError:
+            pass
+
+    def test_bad_object_type(self):
+        uut = connect(BASE_URL, 'test', [])
+        try:
+            uut.on_object_event('StasisStart', self.noop, self.noop, 'Bridge')
+            self.fail("Event has no bridge")
+        except ValueError:
+            pass
+
+    def noop(self, *args, **kwargs):
+        self.fail("Noop unexpectedly called")
+
 
 class WebSocketStubConnection(object):
     def __init__(self, messages):

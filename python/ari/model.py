@@ -38,11 +38,10 @@ class Repository(object):
         return "Repository(%s)" % self.name
 
     def __getattr__(self, item):
-        oper = getattr(self.api, item)
+        oper = getattr(self.api, item, None)
         if not (hasattr(oper, '__call__') and hasattr(oper, 'json')):
             raise AttributeError(
-                "'%s' object has no attribute '%r'" % (
-                    self.__class__.__name__, item))
+                "'%r' object has no attribute '%r'" % (self, item))
 
         return lambda **kwargs: promote(self.client, oper(**kwargs), oper.json)
 
@@ -80,11 +79,10 @@ class BaseObject(object):
         return "%s(%s)=%r" % (self.__class__.__name__, self.id, self.json)
 
     def __getattr__(self, item):
-        oper = getattr(self.api, item)
+        oper = getattr(self.api, item, None)
         if not (hasattr(oper, '__call__') and hasattr(oper, 'json')):
             raise AttributeError(
-                "'%s' object has no attribute '%r'" % (
-                    self.__class__.__name__, item))
+                "'%r' object has no attribute '%r'" % (self, item))
 
         def promoter(**kwargs):
             # Add id to param list
