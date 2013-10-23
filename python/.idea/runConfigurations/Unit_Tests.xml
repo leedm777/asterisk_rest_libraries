@@ -4,7 +4,7 @@
     <option name="PARENT_ENVS" value="true" />
     <envs />
     <option name="SDK_HOME" value="$USER_HOME$/virtualenv/swagger/bin/python" />
-    <option name="WORKING_DIRECTORY" value="" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
     <option name="IS_MODULE_SDK" value="false" />
     <option name="ADD_CONTENT_ROOTS" value="true" />
     <option name="ADD_SOURCE_ROOTS" value="true" />
@@ -19,7 +19,9 @@
     <option name="USE_PATTERN" value="false" />
     <option name="PARAMS" value="--config nose.cfg" />
     <option name="USE_PARAM" value="true" />
+    <RunnerSettings RunnerId="PyDebugRunner" />
     <RunnerSettings RunnerId="PythonRunner" />
+    <ConfigurationWrapper RunnerId="PyDebugRunner" />
     <ConfigurationWrapper RunnerId="PythonRunner" />
     <method />
   </configuration>
