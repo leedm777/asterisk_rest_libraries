@@ -48,17 +48,17 @@ class Repository(object):
 
 
 class BaseObject(object):
-    def __init__(self, client, api, as_json, param_name, factory_fn, model_id):
+    def __init__(self, client, api, as_json, param_name, event_reg,
+                 get_id=lambda json: json['id']):
         self.client = client
         self.api = api
         self.json = as_json
-        self.id = as_json['id']
+        self.id = get_id(as_json)
         self.param_name = param_name
-        self.model_id = model_id
-        self.factory_fn = factory_fn
+        self.event_reg = event_reg
 
     def __repr__(self):
-        return "Repository(%s)" % self.name
+        return "%s(%s) {%r}" % (self.__class__.__name__, self.id, self.json)
 
     def __getattr__(self, item):
         oper = getattr(self.api, item)
@@ -83,33 +83,51 @@ class BaseObject(object):
                 if self.id == objects.id:
                     fn(objects, event)
 
-        self.client.on_object_event(event_type, fn_filter, self.factory_fn,
-                                    self.model_id)
+        self.event_reg(event_type, fn_filter)
 
 
 class Channel(BaseObject):
     def __init__(self, client, channel_json):
         super(Channel, self).__init__(
             client, client.swagger.apis.channels, channel_json, 'channelId',
-            Channel, 'Channel')
+            client.on_channel_event)
 
 
 class Bridge(BaseObject):
     def __init__(self, client, bridge_json):
         super(Bridge, self).__init__(
             client, client.swagger.apis.bridges, bridge_json, 'bridgeId',
-            Bridge, 'Bridge')
+            client.on_bridge_event)
 
 
 class Playback(BaseObject):
     def __init__(self, client, playback_json):
         super(Playback, self).__init__(
             client, client.swagger.apis.playback, playback_json, 'playbackId',
-            Playback, 'Playback')
+            client.on_playback_event)
+
+
+def endpoint_get_id(json):
+    return "%s/%s" % (json['technology'], json['resource'])
+
+
+class Endpoint(BaseObject):
+    def __init__(self, client, endpoint_json):
+        super(Endpoint, self).__init__(
+            client, client.swagger.apis.endpoints, endpoint_json, 'endpointId',
+            client.on_endpoint_event, get_id=endpoint_get_id)
+
+
+class Sound(BaseObject):
+    def __init__(self, client, sound_json):
+        super(Sound, self).__init__(
+            client, client.swagger.apis.sounds, sound_json, 'soundId',
+            client.on_sound_event)
 
 
 CLASS_MAP = {
-    'Channel': Channel,
     'Bridge': Bridge,
+    'Channel': Channel,
+    'Endpoint': Endpoint,
     'Playback': Playback
 }

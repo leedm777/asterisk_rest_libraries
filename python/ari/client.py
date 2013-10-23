@@ -5,30 +5,11 @@
 import json
 import logging
 import urlparse
-import requests
-import requests.auth
 import swaggerpy.client
-from model import Channel, Bridge, Repository
+
+from ari.model import *
 
 log = logging.getLogger(__name__)
-
-
-class AriBasicAuthFactory(object):
-    """ARI session factory, using HTTP Basic auth
-
-    :param username: ARI username
-    :param password: ARI password
-    """
-
-    def __init__(self, username, password):
-        self.auth = requests.auth.HTTPBasicAuth(username, password)
-
-    def build_session(self):
-        """Build a session for use with ARI.
-        """
-        session = requests.Session()
-        session.auth = self.auth
-        return session
 
 
 class Client(object):
@@ -63,9 +44,20 @@ class Client(object):
         self.apps = apps or []
 
     def __getattr__(self, item):
-        return self.repositories[item]
+        """Exposes repositories as Client fields.
+
+        :param item: Field name
+        """
+        repo = self.repositories.get(item)
+        if not repo:
+            raise AttributeError(
+                "AttributeError: '%s' object has no attribute '%s'" % (
+                    self.__class__.__name__, item))
+        return repo
 
     def run(self):
+        """Connect to the WebSocket and begin processing messages.
+        """
         ws = self.swagger.apis.events.eventWebsocket(app=','.join(self.apps))
         # TypeChecker false positive on iter(callable, sentinel) -> iterator
         # Fixed in plugin v3.0.1
@@ -80,14 +72,32 @@ class Client(object):
                 except Exception:
                     log.exception("Event listener threw exception")
 
-    def on_event(self, event_type, fn):
+    def on_event(self, event_type, event_cb):
+        """Register callback for events with given type.
+
+        :param event_type: String name of the event to register for.
+        :param event_cb: Callback function
+        :type  event_cb: (dict) -> None
+        """
         listeners = self.event_listeners.get(event_type)
         if listeners is None:
             listeners = []
             self.event_listeners[event_type] = listeners
-        listeners.append(fn)
+        listeners.append(event_cb)
 
     def on_object_event(self, event_type, event_cb, factory_fn, model_id):
+        """Register callback for events with the given type. Event fields of
+        the given model_id type are passed along to event_cb.
+
+        If multiple fields of the event have the type model_id, a dict is
+        passed mapping the field name to the model object.
+
+        :param event_type: String name of the event to register for.
+        :param event_cb: Callback function
+        :type  event_cb: (Obj, dict) -> None or (dict[str, Obj], dict) ->
+        :param factory_fn: Function for creating Obj from JSON
+        :param model_id: String id for Obj from Swagger models.
+        """
         event_model = self.event_models[event_type]
         if not event_model:
             raise ValueError("Cannot find event model '%s'" % event_type)
@@ -113,7 +123,46 @@ class Client(object):
         self.on_event(event_type, fn_channels)
 
     def on_channel_event(self, event_type, fn):
+        """Register callback for Channel related events
+
+        :param event_type: String name of the event to register for.
+        :param fn: Callback function
+        :type  fn: (Channel, dict) -> None or (list[Channel], dict) -> None
+        """
         return self.on_object_event(event_type, fn, Channel, 'Channel')
 
     def on_bridge_event(self, event_type, fn):
+        """Register callback for Bridge related events
+
+        :param event_type: String name of the event to register for.
+        :param fn: Callback function
+        :type  fn: (Bridge, dict) -> None or (list[Bridge], dict) -> None
+        """
         return self.on_object_event(event_type, fn, Bridge, 'Bridge')
+
+    def on_playback_event(self, event_type, fn):
+        """Register callback for Playback related events
+
+        :param event_type: String name of the event to register for.
+        :param fn: Callback function
+        :type  fn: (Playback, dict) -> None or (list[Playback], dict) -> None
+        """
+        return self.on_object_event(event_type, fn, Playback, 'Playback')
+
+    def on_endpoint_event(self, event_type, fn):
+        """Register callback for Endpoint related events
+
+        :param event_type: String name of the event to register for.
+        :param fn: Callback function
+        :type  fn: (Endpoint, dict) -> None or (list[Endpoint], dict) -> None
+        """
+        return self.on_object_event(event_type, fn, Endpoint, 'Endpoint')
+
+    def on_sound_event(self, event_type, fn):
+        """Register callback for Sound related events
+
+        :param event_type: String name of the event to register for.
+        :param fn: Sound function
+        :type  fn: (Sound, dict) -> None or (list[Sound], dict) -> None
+        """
+        return self.on_object_event(event_type, fn, Sound, 'Sound')

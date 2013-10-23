@@ -8,4 +8,3 @@
 import client
 
 Client = client.Client
-AriBasicAuthFactory = client.AriBasicAuthFactory
