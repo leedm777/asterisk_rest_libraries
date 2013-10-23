@@ -12,16 +12,6 @@ from ari.model import *
 log = logging.getLogger(__name__)
 
 
-class RegexListener(object):
-    def __init__(self, regex, callback):
-        self.regex = regex
-        self.callback = callback
-
-    def __call__(self, event):
-        if self.regex.match(event.get('type')):
-            self.callback(event)
-
-
 class Client(object):
     """ARI Client object.
 
@@ -95,17 +85,11 @@ class Client(object):
         :param event_cb: Callback function
         :type  event_cb: (dict) -> None
         """
-        if isinstance(event_type, str):
-            listeners = self.event_listeners.get(event_type)
-            if listeners is None:
-                listeners = []
-                self.event_listeners[event_type] = listeners
-            listeners.append(event_cb)
-        elif hasattr(event_type, 'match'):
-            self.global_listeners.append(RegexListener(event_type, event_cb))
-        else:
-            raise ValueError('Unsupported event_type: %s' %
-                             event_type.__class__.__name__)
+        listeners = self.event_listeners.get(event_type)
+        if listeners is None:
+            listeners = []
+            self.event_listeners[event_type] = listeners
+        listeners.append(event_cb)
 
     def on_object_event(self, event_type, event_cb, factory_fn, model_id):
         """Register callback for events with the given type. Event fields of

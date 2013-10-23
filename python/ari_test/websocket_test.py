@@ -2,38 +2,93 @@
 
 import unittest
 import ari
-import re
+import httpretty
 
 from ari_test.utils import AriTestCase
 from swaggerpy.http_client import SynchronousHttpClient
 
 BASE_URL = "http://ari.py/ari"
 
+GET = httpretty.GET
+PUT = httpretty.PUT
+POST = httpretty.POST
+DELETE = httpretty.DELETE
+
 
 class WebSocketTest(AriTestCase):
+    def setUp(self):
+        super(WebSocketTest, self).setUp()
+        self.actual = []
+
+    def record_event(self, event):
+        self.actual.append(event)
+
     def test_empty(self):
         uut = connect(BASE_URL, 'test', [])
-        actual = []
-        uut.on_event(re.compile('.*'), lambda ev: actual.append(ev))
+        uut.on_event('ev', self.record_event)
         uut.run()
-        self.assertEqual([], actual)
+        self.assertEqual([], self.actual)
 
     def test_series(self):
         messages = [
-            '{"type": "do"}',
-            '{"type": "re"}',
-            '{"type": "mi"}'
+            '{"type": "ev", "data": 1}',
+            '{"type": "ev", "data": 2}',
+            '{"type": "not_ev", "data": 3}',
+            '{"type": "not_ev", "data": 5}',
+            '{"type": "ev", "data": 9}'
         ]
         uut = connect(BASE_URL, 'test', messages)
-        actual = []
-        uut.on_event(re.compile('.*'), lambda ev: actual.append(ev))
+        uut.on_event("ev", self.record_event)
         uut.run()
         expected = [
-            {"type": "do"},
-            {"type": "re"},
-            {"type": "mi"}
+            {"type": "ev", "data": 1},
+            {"type": "ev", "data": 2},
+            {"type": "ev", "data": 9}
         ]
-        self.assertEqual(expected, actual)
+        self.assertEqual(expected, self.actual)
+
+    def test_on_channel(self):
+        self.serve(DELETE, 'channel', 'test-channel')
+        messages = [
+            '{ "type": "StasisStart", "channel": { "id": "test-channel" } }'
+        ]
+        uut = connect(BASE_URL, 'test', messages)
+
+        def cb(channel, event):
+            self.record_event(event)
+            channel.hangup()
+
+        uut.on_channel_event('StasisStart', cb)
+        uut.run()
+
+        expected = [
+            {"type": "StasisStart", "channel": {"id": "test-channel"}}
+        ]
+        self.assertEqual(expected, self.actual)
+
+    def test_channel_on_event(self):
+        self.serve(GET, 'channels', 'test-channel',
+                   body='{"id": "test-channel"}')
+        self.serve(DELETE, 'channels', 'test-channel')
+        messages = [
+            '{"type": "ChannelStateChange", "channel": {"id": "ignore-me"}}',
+            '{"type": "ChannelStateChange", "channel": {"id": "test-channel"}}'
+        ]
+
+        uut = connect(BASE_URL, 'test', messages)
+        channel = uut.channels.get(channelId='test-channel')
+
+        def cb(channel, event):
+            self.record_event(event)
+            channel.hangup()
+
+        channel.on_event('ChannelStateChange', cb)
+        uut.run()
+
+        expected = [
+            {"type": "ChannelStateChange", "channel": {"id": "test-channel"}}
+        ]
+        self.assertEqual(expected, self.actual)
 
 
 class WebSocketStubConnection(object):
