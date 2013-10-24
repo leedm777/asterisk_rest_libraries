@@ -2,6 +2,9 @@
 # Copyright (c) 2013, Digium, Inc.
 #
 
+"""ARI client library.
+"""
+
 import json
 import logging
 import urlparse
@@ -44,12 +47,19 @@ class Client(object):
 
         :param item: Field name
         """
-        repo = self.repositories.get(item)
+        repo = self.get_repo(item)
         if not repo:
             raise AttributeError(
-                "AttributeError: '%r' object has no attribute '%s'" % (
-                    self.__class__.__name__, item))
+                "'%r' object has no attribute '%s'" % (self, item))
         return repo
+
+    def get_repo(self, name):
+        """Get a specific repo by name.
+
+        :param name: Name of the repo to get
+        :return:
+        """
+        return self.repositories.get(name)
 
     def run(self, apps):
         """Connect to the WebSocket and begin processing messages.

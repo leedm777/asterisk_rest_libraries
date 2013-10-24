@@ -4,6 +4,7 @@
     <exclude-output />
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/asterisk_rest_library.egg-info" />
+      <excludeFolder url="file://$MODULE_DIR$/cover" />
     </content>
     <orderEntry type="jdk" jdkName="Python 2.7.2 virtualenv at ~/virtualenv/swagger" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

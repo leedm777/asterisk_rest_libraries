@@ -1,17 +1,25 @@
 #!/usr/bin/env python
 
+"""Short example of how to use bridge objects.
+
+This example will create a holding bridge (if one doesn't already exist). Any
+channels that enter Stasis is placed into the bridge. Whenever a channel
+enters the bridge, a tone is played to the bridge.
+"""
+
 #
 # Copyright (c) 2013, Digium, Inc.
 #
 
 import ari
-from swaggerpy.http_client import SynchronousHttpClient
 
-http_client = SynchronousHttpClient()
-http_client.set_basic_auth('localhost', 'hey', 'peekaboo')
-client = ari.Client('http://localhost:8088/', http_client, apps='hello')
+client = ari.connect('http://localhost:8088/', 'hey', 'peekaboo')
 
-bridges = [b for b in client.bridges.list() if b.json['bridge_type'] == 'holding']
+#
+# Find (or create) a holding bridge.
+#
+bridges = [b for b in client.bridges.list() if
+           b.json['bridge_type'] == 'holding']
 if bridges:
     bridge = bridges[0]
     print "Using bridge %s" % bridge.id
@@ -21,18 +29,35 @@ else:
 
 
 def on_enter(bridge, ev):
+    """Callback for bridge enter events.
+
+    When channels enter the bridge, play tones to the whole bridge.
+
+    :param bridge: Bridge entering the channel.
+    :param ev: Event.
+    """
     # ignore announcer channels - see ASTERISK-22744
-    if not ev['channel']['name'].startswith('Announcer/'):
-        bridge.play(media="sound:hello-world")
+    if ev['channel']['name'].startswith('Announcer/'):
+        return
+    bridge.play(media="sound:ascending-2tone")
 
 
 bridge.on_event('ChannelEnteredBridge', on_enter)
 
 
-def add_to_bridge(channel, ev):
+def stasis_start_cb(channel, ev):
+    """Callback for StasisStart events.
+
+    For new channels, answer and put them in the holding bridge.
+
+    :param channel: Channel that entered Stasis
+    :param ev: Event
+    """
     channel.answer()
     bridge.addChannel(channel=channel.id)
 
 
-client.on_channel_event('StasisStart', add_to_bridge)
-client.run()
+client.on_channel_event('StasisStart', stasis_start_cb)
+
+# Run the WebSocket
+client.run(apps='hello')

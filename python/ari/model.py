@@ -41,7 +41,7 @@ class Repository(object):
         oper = getattr(self.api, item, None)
         if not (hasattr(oper, '__call__') and hasattr(oper, 'json')):
             raise AttributeError(
-                "'%r' object has no attribute '%r'" % (self, item))
+                "'%r' object has no attribute '%s'" % (self, item))
 
         return lambda **kwargs: promote(self.client, oper(**kwargs), oper.json)
 

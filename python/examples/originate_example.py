@@ -1,20 +1,25 @@
 #!/usr/bin/env python
 
+"""Example demonstrating ARI channel origination.
+
+"""
+
 #
 # Copyright (c) 2013, Digium, Inc.
 #
-from requests import HTTPError
+import requests
 
 import ari
-from swaggerpy.http_client import SynchronousHttpClient, requests
-import logging
 
-logging.basicConfig()
+from requests import HTTPError
 
-http_client = SynchronousHttpClient()
-http_client.set_basic_auth('localhost', 'hey', 'peekaboo')
-client = ari.Client('http://localhost:8088/', http_client, apps='hello')
+OUTGOING_ENDPOINT = "SIP/blink"
 
+client = ari.connect('http://localhost:8088/', 'hey', 'peekaboo')
+
+#
+# Find (or create) a holding bridge.
+#
 bridges = [b for b in client.bridges.list()
            if b.json['bridge_type'] == 'holding']
 if bridges:
@@ -26,6 +31,10 @@ else:
 
 
 def safe_hangup(channel):
+    """Hangup a channel, ignoring 404 errors.
+
+    :param channel: Channel to hangup.
+    """
     try:
         channel.hangup()
     except HTTPError as e:
@@ -33,24 +42,54 @@ def safe_hangup(channel):
         if e.response.status_code != requests.codes.not_found:
             raise
 
-def connect(incoming, ev):
-    if ev['args'] == ['incoming']:
-        incoming.answer()
-        incoming.play(media="sound:pls-wait-connect-call")
-        holding_bridge.addChannel(channel=incoming.id)
-        outgoing = client.channels.originate(endpoint="SIP/blink", app="hello",
-                                             appArgs="dialed")
-        incoming.on_event('StasisEnd', lambda *args: safe_hangup(outgoing))
-        outgoing.on_event('ChannelDestroyed', lambda *args: safe_hangup(incoming))
 
-        def bridge_the_call(*ignored):
-            bridge = client.bridges.create(type='mixing')
-            outgoing.answer()
-            bridge.addChannel(channel=[incoming.id, outgoing.id])
-            outgoing.on_event('StasisEnd', lambda *args: bridge.destroy())
+def on_start(incoming, event):
+    """Callback for StasisStart events.
 
-        outgoing.on_event('StasisStart', bridge_the_call)
+    When an incoming channel starts, put it in the holding bridge and
+    originate a channel to connect to it. When that channel answers, create a
+    bridge and put both of them into it.
+
+    :param incoming:
+    :param event:
+    """
+    # Only process channels with the 'incoming' argument
+    if event['args'] != ['incoming']:
+        return
+
+    # Answer and put in the holding bridge
+    incoming.answer()
+    incoming.play(media="sound:pls-wait-connect-call")
+    holding_bridge.addChannel(channel=incoming.id)
+
+    # Originate the outgoing channel
+    outgoing = client.channels.originate(
+        endpoint=OUTGOING_ENDPOINT, app="hello", appArgs="dialed")
+
+    # If the incoming channel ends, hangup the outgoing channel
+    incoming.on_event('StasisEnd', lambda *args: safe_hangup(outgoing))
+    # and vice versa. If the endpoint rejects the call, it is destroyed
+    # without entering Stasis()
+    outgoing.on_event('ChannelDestroyed',
+                      lambda *args: safe_hangup(incoming))
+
+    def outgoing_on_start(channel, event):
+        """Callback for StasisStart events on the outgoing channel
+
+        :param channel: Outgoing channel.
+        :param event: Event.
+        """
+        # Create a bridge, putting both channels into it.
+        bridge = client.bridges.create(type='mixing')
+        outgoing.answer()
+        bridge.addChannel(channel=[incoming.id, outgoing.id])
+        # Clean up the bridge when done
+        outgoing.on_event('StasisEnd', lambda *args: bridge.destroy())
+
+    outgoing.on_event('StasisStart', outgoing_on_start)
 
 
-client.on_channel_event('StasisStart', connect)
-client.run()
+client.on_channel_event('StasisStart', on_start)
+
+# Run the WebSocket
+client.run(apps="hello")
